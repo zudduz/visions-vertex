@@ -1,31 +1,23 @@
 steps:
-  # Install uv and project dependencies
-  - name: "python:3.11"
-    id: "Install Dependencies"
+  # Install dependencies and deploy the agent
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "Install and Deploy"
     entrypoint: "bash"
     args:
       - -c
       - |
+        # Install uv, then project dependencies, then deploy.
+        # The gcloud-sdk image has python pre-installed.
         pip install uv
         make install
-
-  # Deploy to Vertex AI Agent Engine
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    id: "Deploy Agent"
-    entrypoint: "bash"
-    args:
-      - -c
-      - |
-        # The 'make deploy' command from the Makefile handles the deployment.
-        # It requires PROJECT_ID and REGION.
-        # These are provided by Cloud Build substitutions.
         make deploy
     env:
-      - "PROJECT_ID=${PROJECT_ID}"
+      # These substitutions are passed to 'make deploy'
+      - "PROJECT_ID=${_PROJECT_ID}"
       - "REGION=${_REGION}"
 
 substitutions:
-  _REGION: "us-east4" # Or your preferred GCP region
+  _REGION: "us-east4"
 
 options:
   logging: CLOUD_LOGGING_ONLY

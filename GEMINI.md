@@ -1,3 +1,6 @@
+Guidance from the dev:
+I am using us-east4
+
 Coding Agent guidance:
 # Google Agent Development Kit (ADK) Python Cheatsheet
 
