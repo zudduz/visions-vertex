@@ -200,7 +200,9 @@ def deploy_agent_engine_app(
     logging.info(f"Agent config: {agent_config}")
 
     # Check if an agent with this name already exists
+    logging.info("Listing existing agent engines...")
     existing_agents = list(client.agent_engines.list())
+    logging.info("Successfully listed existing agent engines.")
     matching_agents = [
         agent
         for agent in existing_agents
@@ -210,6 +212,7 @@ def deploy_agent_engine_app(
     if matching_agents:
         # Update the existing agent with new configuration
         logging.info(f"\n📝 Updating existing agent: {agent_name}")
+        logging.info(f"Updating agent with name: {matching_agents[0].api_resource.name}")
         remote_agent = client.agent_engines.update(
             name=matching_agents[0].api_resource.name, **agent_config
         )
