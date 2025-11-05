@@ -31,7 +31,7 @@ deploy:
 	# Export dependencies to requirements file using uv export.
 	(uv export --no-hashes --no-header --no-dev --no-emit-project --no-annotate > .requirements.txt 2>/dev/null || \
 	uv export --no-hashes --no-header --no-dev --no-emit-project > .requirements.txt) && \
-	ls -l app && \
+	pip install pydantic==2.11.5 cloudpickle==3.0.0 --break-system-packages && \
 	uv run -m app.agent_engine_app
 
 # Alias for 'make deploy' for backward compatibility
