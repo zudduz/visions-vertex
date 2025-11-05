@@ -8,7 +8,7 @@ steps:
       - |
         # Install uv, then project dependencies, then deploy.
         # The gcloud-sdk image has python pre-installed.
-        pip install uv
+        pip install uv --break-system-packages
         make install
         make deploy
     env:
