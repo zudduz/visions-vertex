@@ -45,7 +45,6 @@ class AgentEngineApp(AdkApp):
 
         super().set_up()
         logging.basicConfig(level=logging.INFO)
-        print("OpenTelemetry tracing is disabled.")
         # logging_client = google_cloud_logging.Client()
         # self.logger = logging_client.logger(__name__)
         # provider = TracerProvider()
