@@ -41,11 +41,11 @@ from app.utils.typing import Feedback
 class AgentEngineApp(AdkApp):
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
-        raise SyntaxError("This is a test")
         import logging
 
         super().set_up()
         logging.basicConfig(level=logging.INFO)
+        print("OpenTelemetry tracing is disabled.")
         # logging_client = google_cloud_logging.Client()
         # self.logger = logging_client.logger(__name__)
         # provider = TracerProvider()
