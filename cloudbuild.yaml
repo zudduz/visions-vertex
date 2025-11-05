@@ -6,8 +6,9 @@ steps:
     args:
       - -c
       - |
-        # The Makefile handles uv installation and dependency management.
-        # The gcloud-sdk image has Python pre-installed.
+        # Install uv, then project dependencies, then deploy.
+        # The gcloud-sdk image has python pre-installed.
+        pip install uv
         make install
         make deploy
     env:
