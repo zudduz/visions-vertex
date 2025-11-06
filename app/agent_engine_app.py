@@ -39,6 +39,10 @@ from app.utils.typing import Feedback
 
 
 class AgentEngineApp(AdkApp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.agent = kwargs['agent']
+
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
         import logging
