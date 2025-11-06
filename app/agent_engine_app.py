@@ -173,14 +173,13 @@ def deploy_agent_engine_app(
         agent=root_agent,
         artifact_service_builder=lambda: GcsArtifactService(
             bucket_name=artifacts_bucket_name
-        ),
-    )
-    # Set worker parallelism to 1
-    env_vars["NUM_WORKERS"] = "1"
-
-    # Common configuration for both create and update operations
-    labels: dict[str, str] = {}
-
+                ),
+            )
+            # Set worker parallelism to 0
+            env_vars["NUM_WORKERS"] = "0"
+        
+            # Common configuration for both create and update operations
+            labels: dict[str, str] = {}
     config = AgentEngineConfig(
         display_name=agent_name,
         description="A base ReAct agent built with Google's Agent Development Kit (ADK)",
