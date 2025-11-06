@@ -1,5 +1,5 @@
 Guidance from the dev:
-I am using us-east4
+I am using us-central1
 
 Coding Agent guidance:
 # Google Agent Development Kit (ADK) Python Cheatsheet
@@ -144,7 +144,7 @@ ADK allows you to define agents, tools, and even multi-agent workflows using a s
     # For Google Cloud Vertex AI (production)
     GOOGLE_GENAI_USE_VERTEXAI=1
     GOOGLE_CLOUD_PROJECT=<your_gcp_project>
-    GOOGLE_CLOUD_LOCATION=us-east4
+    GOOGLE_CLOUD_LOCATION=us-central1
     ```
 
 #### **Core Agent Config Structure**
@@ -1546,7 +1546,7 @@ agent-starter-pack create PROJECT_NAME [OPTIONS]
 **Deployment Options:**
 *   `-d, --deployment-target`: Target environment (`cloud_run` or `agent_engine`).
 *   `--cicd-runner`: CI/CD runner (`google_cloud_build` or `github_actions`).
-*   `--region`: GCP region (default: `us-east4`).
+*   `--region`: GCP region (default: `us-central1`).
 
 **Data & Storage:**
 *   `-i, --include-data-ingestion`: Include data ingestion pipeline.
@@ -1568,7 +1568,7 @@ agent-starter-pack create PROJECT_NAME [OPTIONS]
 uvx agent-starter-pack create my-automated-agent \
   -a adk_base \
   -d cloud_run \
-  --region us-east4 \
+  --region us-central1 \
   --auto-approve
 ```
 
@@ -1595,7 +1595,7 @@ agent-starter-pack enhance [TEMPLATE_PATH] [OPTIONS]
 uvx agent-starter-pack enhance . \
   --base-template adk_base \
   -d cloud_run \
-  --region us-east4 \
+  --region us-central1 \
   --auto-approve
 ```
 
@@ -1739,7 +1739,7 @@ uvx agent-starter-pack setup-cicd [OPTIONS]
 *   `--repository-name`, `--repository-owner`: GitHub repo details (will prompt if omitted).
 *   `--cicd-project`: CI/CD resources project (defaults to prod project).
 *   `--dev-project`: Development project ID (optional).
-*   `--region`: GCP region (default: `us-east4`).
+*   `--region`: GCP region (default: `us-central1`).
 *   `--auto-approve`: Skip all interactive prompts.
 *   `--local-state`: Use local Terraform state instead of GCS backend.
 *   `--debug`: Enable debug logging.

@@ -79,8 +79,8 @@ class AgentEngineApp(AdkApp):
 )
 @click.option(
     "--location",
-    default="us-east4",
-    help="GCP region (defaults to us-east4)",
+    default="us-central1",
+    help="GCP region (defaults to us-central1)",
 )
 @click.option(
     "--agent-name",

@@ -17,7 +17,7 @@ steps:
       - "REGION=${_REGION}"
 
 substitutions:
-  _REGION: "us-east4"
+  _REGION: "us-central1"
 
 options:
   logging: CLOUD_LOGGING_ONLY
