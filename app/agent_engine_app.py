@@ -67,7 +67,7 @@ class AgentEngineApp(AdkApp):
 
     def query(self, prompt: str) -> str:
         """Queries the agent and returns the response."""
-        return self.agent.invoke(prompt)
+        return self.agent.chat(prompt)
 
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent.
