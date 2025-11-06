@@ -61,13 +61,17 @@ class AgentEngineApp(AdkApp):
         feedback_obj = Feedback.model_validate(feedback)
         self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
 
+    def query(self, prompt: str) -> str:
+        """Queries the agent and returns the response."""
+        return self.agent.invoke(prompt)
+
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent.
 
         Extends the base operations to include feedback registration functionality.
         """
         operations = super().register_operations()
-        operations[""] = operations.get("", []) + ["register_feedback"]
+        operations[""] = operations.get("", []) + ["register_feedback", "query"]
         return operations
 
 
