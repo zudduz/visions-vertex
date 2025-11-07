@@ -65,9 +65,9 @@ class AgentEngineApp(AdkApp):
         feedback_obj = Feedback.model_validate(feedback)
         self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
 
-    def query(self, prompt: str) -> str:
+    async def query(self, prompt: str) -> str:
         """Queries the agent and returns the response."""
-        return self.agent.chat(prompt)
+        return await self.agent.ainvoke(prompt)
 
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent.
