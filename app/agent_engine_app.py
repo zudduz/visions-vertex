@@ -1,18 +1,4 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# mypy: disable-error-code="attr-defined,arg-type"
+import asyncio # Added for synchronous execution of async agent
 import logging
 import os
 from typing import Any
@@ -21,6 +7,7 @@ import click
 import google.auth
 import vertexai
 from google.adk.artifacts import GcsArtifactService
+from google.adk.agents.invocation_context import InvocationContext # Added for agent invocation context
 from google.cloud import logging as google_cloud_logging
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, export
@@ -65,10 +52,20 @@ class AgentEngineApp(AdkApp):
         feedback_obj = Feedback.model_validate(feedback)
         self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
 
-    async def query(self, prompt: str) -> str:
+    def query(self, prompt: str) -> str:
         """Queries the agent and returns the response."""
-        return await self.agent.ainvoke(prompt)
+        context = InvocationContext(prompt=prompt)
+        
+        final_response = ""
+        async def _run_and_collect():
+            nonlocal final_response
+            async for event in self.agent.run_async(context):
+                if event.is_final_response() and event.content and event.content.text:
+                    final_response = event.content.text
+                    break
+            return final_response
 
+        return asyncio.run(_run_and_collect())
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent.
 
