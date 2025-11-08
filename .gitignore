@@ -1,4 +1,6 @@
 deployment_metadata.json
+gemini-reference/
+*.bak
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
