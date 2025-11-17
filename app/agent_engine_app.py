@@ -30,24 +30,20 @@ class AgentEngineApp(AdkApp):
         super().__init__(**kwargs)
         self.agent = kwargs['agent']
 
-    def query_blocking(self, query: str) -> str:
+    async def query_blocking(self, query: str) -> str:
         """
         Queries the agent with the given input and returns the complete,
         blocking response.
         """
-
-        async def run_query():
-            response_chunks = []
-            async for chunk in self.query(input=query):
-                response_chunks.append(chunk)
-            # The final chunk contains the final output.
-            if response_chunks:
-                last_chunk = response_chunks[-1]
-                if "output" in last_chunk:
-                    return last_chunk["output"]
-            return ""
-
-        return asyncio.run(run_query())
+        response_chunks = []
+        async for chunk in self.query(input=query):
+            response_chunks.append(chunk)
+        # The final chunk contains the final output.
+        if response_chunks:
+            last_chunk = response_chunks[-1]
+            if "output" in last_chunk:
+                return last_chunk["output"]
+        return ""
 
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
