@@ -30,6 +30,25 @@ class AgentEngineApp(AdkApp):
         super().__init__(**kwargs)
         self.agent = kwargs['agent']
 
+    def query_blocking(self, query: str) -> str:
+        """
+        Queries the agent with the given input and returns the complete,
+        blocking response.
+        """
+
+        async def run_query():
+            response_chunks = []
+            async for chunk in self.query(input=query):
+                response_chunks.append(chunk)
+            # The final chunk contains the final output.
+            if response_chunks:
+                last_chunk = response_chunks[-1]
+                if "output" in last_chunk:
+                    return last_chunk["output"]
+            return ""
+
+        return asyncio.run(run_query())
+
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
         import logging
@@ -52,27 +71,16 @@ class AgentEngineApp(AdkApp):
         feedback_obj = Feedback.model_validate(feedback)
         self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
 
-    def query(self, prompt: str) -> str:
-        """Queries the agent and returns the response."""
-        context = InvocationContext(prompt=prompt)
-        
-        final_response = ""
-        async def _run_and_collect():
-            nonlocal final_response
-            async for event in self.agent.run_async(context):
-                if event.is_final_response() and event.content and event.content.text:
-                    final_response = event.content.text
-                    break
-            return final_response
-
-        return asyncio.run(_run_and_collect())
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent.
 
         Extends the base operations to include feedback registration functionality.
         """
         operations = super().register_operations()
-        operations[""] = operations.get("", []) + ["register_feedback", "query"]
+        operations[""] = operations.get("", []) + [
+            "register_feedback",
+            "query_blocking",
+        ]
         return operations
 
 
