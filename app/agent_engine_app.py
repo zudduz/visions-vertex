@@ -30,11 +30,22 @@ class AgentEngineApp(AdkApp):
         super().__init__(**kwargs)
         self.agent = kwargs['agent']
 
+    async def query_agent(self, query: str) -> str:
+        """
+        Queries the agent with the given input and returns the complete,
+        blocking response. This is the entrypoint for synchronous API calls.
+        """
+        context = InvocationContext(
+            agent=self.agent, artifact_service=self.artifact_service
+        )
+        return await context.run_agent(prompt=query)
+
     async def query_blocking(self, query: str) -> str:
         """
         Queries the agent with the given input and returns the complete,
         blocking response.
         """
+        logging.info(f"Received query: {query}")
         response_chunks = []
         async for chunk in self.query(input=query):
             response_chunks.append(chunk)
@@ -75,7 +86,7 @@ class AgentEngineApp(AdkApp):
         operations = super().register_operations()
         operations[""] = operations.get("", []) + [
             "register_feedback",
-            "query_blocking",
+            "query_agent",
         ]
         return operations
 
