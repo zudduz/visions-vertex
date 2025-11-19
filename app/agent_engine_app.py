@@ -1,4 +1,3 @@
-import asyncio # Added for synchronous execution of async agent
 import logging
 import os
 from typing import Any
@@ -30,7 +29,7 @@ class AgentEngineApp(AdkApp):
         super().__init__(**kwargs)
         self.agent = kwargs['agent']
 
-    async def query_agent(self, query: str) -> str:
+    async def query(self, query: str) -> str:
         """
         Queries the agent with the given input and returns the complete,
         blocking response. This is the entrypoint for synchronous API calls.
@@ -46,15 +45,9 @@ class AgentEngineApp(AdkApp):
         blocking response.
         """
         logging.info(f"Received query: {query}")
-        response_chunks = []
-        async for chunk in self.query(input=query):
-            response_chunks.append(chunk)
-        # The final chunk contains the final output.
-        if response_chunks:
-            last_chunk = response_chunks[-1]
-            if "output" in last_chunk:
-                return last_chunk["output"]
-        return ""
+        response = await self.query(query=query)
+        logging.info(f"Returning response: {response}")
+        return response
 
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
@@ -86,7 +79,7 @@ class AgentEngineApp(AdkApp):
         operations = super().register_operations()
         operations[""] = operations.get("", []) + [
             "register_feedback",
-            "query_agent",
+            "query",
         ]
         return operations
 
