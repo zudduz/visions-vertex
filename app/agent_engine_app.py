@@ -6,7 +6,7 @@ import click
 import google.auth
 import vertexai
 from google.adk.artifacts import GcsArtifactService
-from google.adk.agents.invocation_context import InvocationContext # Added for agent invocation context
+from google.adk.agents.invocation_context import InvocationContext
 from google.cloud import logging as google_cloud_logging
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, export
@@ -35,7 +35,7 @@ class AgentEngineApp(AdkApp):
         blocking response. This is the entrypoint for synchronous API calls.
         """
         context = InvocationContext(
-            agent=self.agent, artifact_service=self.artifact_service
+            agent=self.agent
         )
         return await context.run_agent(prompt=query)
 
