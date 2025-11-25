@@ -4,6 +4,7 @@ from typing import Any
 
 import click
 import google.auth
+import vertexai
 from google.adk.artifacts import GcsArtifactService
 from google.adk.agents.invocation_context import InvocationContext
 from google.cloud import logging as google_cloud_logging
@@ -27,6 +28,16 @@ class AgentEngineApp(AdkApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.agent = kwargs['agent']
+
+    async def query(self, query: str) -> str:
+        """
+        Queries the agent with the given input and returns the complete,
+        blocking response. This is the entrypoint for synchronous API calls.
+        """
+        context = InvocationContext(
+            agent=self.agent
+        )
+        return await context.run_agent(prompt=query)
 
     async def query_blocking(self, query: str) -> str:
         """
@@ -66,7 +77,10 @@ class AgentEngineApp(AdkApp):
         Extends the base operations to include feedback registration functionality.
         """
         operations = super().register_operations()
-        operations[""] = operations.get("", []) + ["register_feedback"]
+        operations[""] = operations.get("", []) + [
+            "register_feedback",
+            "query",
+        ]
         return operations
 
 
@@ -159,7 +173,11 @@ def deploy_agent_engine_app(
     extra_packages_list = list(extra_packages)
 
     # Initialize vertexai client
-    AgentEngine.init(project=project, location=location)
+    client = vertexai.Client(
+        project=project,
+        location=location,
+    )
+    vertexai.init(project=project, location=location)
 
     # Read requirements
     with open(requirements_file) as f:
@@ -188,24 +206,30 @@ def deploy_agent_engine_app(
         gcs_dir_name=agent_name,
     )
 
-    logging.info(f"Agent config: {config}")
+    agent_config = {
+        "agent": agent_engine,
+        "config": config,
+    }
+    logging.info(f"Agent config: {agent_config}")
 
     # Check if an agent with this name already exists
-    existing_agents = list(AgentEngine.list())
+    existing_agents = list(client.agent_engines.list())
     matching_agents = [
         agent
         for agent in existing_agents
-        if agent.display_name == agent_name
+        if agent.api_resource.display_name == agent_name
     ]
 
     if matching_agents:
         # Update the existing agent with new configuration
         logging.info(f"\n📝 Updating existing agent: {agent_name}")
-        remote_agent = AgentEngine.from_adk_app(agent_engine, config=config, id=matching_agents[0].name)
+        remote_agent = client.agent_engines.update(
+            name=matching_agents[0].api_resource.name, **agent_config
+        )
     else:
         # Create a new agent if none exists
         logging.info(f"\n🚀 Creating new agent: {agent_name}")
-        remote_agent = AgentEngine.from_adk_app(agent_engine, config=config)
+        remote_agent = client.agent_engines.create(**agent_config)
 
     write_deployment_metadata(remote_agent)
     print_deployment_success(remote_agent, location, project)
