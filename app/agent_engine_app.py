@@ -3,6 +3,7 @@ import click
 import google.auth
 import vertexai
 from google.adk.artifacts import GcsArtifactService
+from google.adk.agents.invocation_context import InvocationContext
 from vertexai._genai.types import AgentEngine, AgentEngineConfig
 from vertexai.agent_engines.templates.adk import AdkApp
 
@@ -13,6 +14,82 @@ from app.utils.deployment import (
     write_deployment_metadata,
 )
 from app.utils.gcs import create_bucket_if_not_exists
+
+
+class AgentEngineApp(AdkApp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # AdkApp stores the agent in self._tmpl_attrs['agent']
+        # We can access it via self._tmpl_attrs.get("agent")
+        
+    def query(self, input: str) -> str:
+        """
+        Queries the agent with the given input and returns the complete,
+        blocking response.
+        
+        Args:
+            input (str): The user's query text.
+            
+        Returns:
+            str: The agent's response text.
+        """
+        # We need to run the async agent synchronously
+        import asyncio
+        
+        # Helper to run async query
+        async def _run_async():
+            context = InvocationContext(
+                agent=self._tmpl_attrs.get("agent")
+            )
+            return await context.run_agent(prompt=input)
+
+        # Run in new event loop if needed, or existing one
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            # If we are already in a running loop (unlikely for this sync call but possible)
+            # we can't block. But Agent Engine calls this in a thread usually.
+            # For simplicity/safety in standard python env:
+            import threading
+            result = []
+            def run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                result.append(new_loop.run_until_complete(_run_async()))
+                new_loop.close()
+                
+            t = threading.Thread(target=run_in_thread)
+            t.start()
+            t.join()
+            return result[0]
+        else:
+            return loop.run_until_complete(_run_async())
+
+    def register_operations(self) -> dict[str, list[str]]:
+        """
+        Registers operations, filtering out async modes that crash the client.
+        """
+        # Get default operations from parent
+        ops = super().register_operations()
+        
+        # 1. Add our custom 'query' method to the standard mode ("")
+        if "" not in ops:
+            ops[""] = []
+        if "query" not in ops[""]:
+            ops[""].append("query")
+            
+        # 2. REMOVE unsupported modes that cause client-side registration failure
+        # The ReasoningEngine client throws ValueError if it sees "async" or "async_stream"
+        if "async" in ops:
+            del ops["async"]
+        if "async_stream" in ops:
+            del ops["async_stream"]
+            
+        return ops
 
 
 @click.command()
@@ -114,8 +191,8 @@ def deploy_agent_engine_app(
     with open(requirements_file) as f:
         requirements = f.read().strip().split("\n")
     
-    # Use the standard AdkApp directly
-    agent_engine = AdkApp(
+    # Use our custom AgentEngineApp
+    agent_engine = AgentEngineApp(
         agent=root_agent,
         enable_tracing=True,
         artifact_service_builder=lambda: GcsArtifactService(
