@@ -1,6 +1,6 @@
+import logging
 import os
 import random
-import logging
 
 import google.auth
 from google.adk.agents import Agent
@@ -23,7 +23,7 @@ def get_vision_themes() -> str:
     themes = ", ".join(random.sample(THEMES, 2))
     logger.info(f"Selected themes: {themes}")
     return themes
-    
+
 root_agent = Agent(
     name="Oracle",
     model="gemini-2.5-flash",

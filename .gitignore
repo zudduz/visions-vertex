@@ -201,3 +201,4 @@ my_env.tfvars
 .env
 .requirements.txt
 _adk_samples_temp/
+reference_repos/
