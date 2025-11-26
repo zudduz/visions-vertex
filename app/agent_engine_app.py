@@ -1,5 +1,4 @@
 import logging
-
 import click
 import google.auth
 import vertexai
@@ -21,29 +20,54 @@ class AgentEngineApp(AdkApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # AdkApp stores the agent in self._tmpl_attrs['agent']
-        # We can access it via self._tmpl_attrs.get("agent")
-
+        
     def query(self, input: str) -> str:
         """
         Queries the agent with the given input and returns the complete,
         blocking response.
-        
-        Args:
-            input (str): The user's query text.
-            
-        Returns:
-            str: The agent's response text.
         """
-        # We need to run the async agent synchronously
         import asyncio
         import threading
-
-        # Helper to run async query
+        
+        # Helper to run async query using AdkApp's proper infrastructure
         async def _run_async():
-            context = InvocationContext(
-                agent=self._tmpl_attrs.get("agent")
-            )
-            return await context.run_agent(prompt=input)
+            # 1. Ensure app is set up (services, runner, etc.)
+            if not self._tmpl_attrs.get("runner"):
+                self.set_up()
+            
+            # 2. Create a session using the configured session service
+            # using a dummy user_id for this stateless query
+            user_id = "default_user"
+            session = await self.async_create_session(user_id=user_id)
+            
+            response_text = ""
+            try:
+                # 3. Use the configured runner to execute
+                # We iterate over events to accumulate the text response
+                runner = self._tmpl_attrs.get("runner")
+                
+                # Convert input string to Content object if needed, 
+                # but runner.run_async handles string/Content.
+                # Actually run_async takes 'new_message'.
+                from google.genai import types
+                message = types.Content(role="user", parts=[types.Part(text=input)])
+                
+                async for event in runner.run_async(
+                    user_id=user_id,
+                    session_id=session.id,
+                    new_message=message
+                ):
+                    # Check for final response text
+                    # (This logic mimics how typical UI clients assemble the response)
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.text:
+                                response_text += part.text
+            finally:
+                # 4. Clean up session
+                await self.async_delete_session(user_id=user_id, session_id=session.id)
+                
+            return response_text
 
         # Container for result or exception
         result_container = {"data": None, "error": None}
@@ -58,49 +82,33 @@ class AgentEngineApp(AdkApp):
                 logging.error(f"Error in async execution: {e}", exc_info=True)
             finally:
                 new_loop.close()
-
-        # Check for existing loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            t = threading.Thread(target=run_in_thread)
-            t.start()
-            t.join()
-        else:
-             # No running loop, just run it directly
-             # (Though Vertex AI might have one, so thread safety is good)
-             t = threading.Thread(target=run_in_thread)
-             t.start()
-             t.join()
-
+        
+        # Always run in a thread to be safe in Vertex AI environment
+        t = threading.Thread(target=run_in_thread)
+        t.start()
+        t.join()
+             
         if result_container["error"]:
             raise result_container["error"]
-
+            
         return result_container["data"]
 
     def register_operations(self) -> dict[str, list[str]]:
         """
         Registers operations, filtering out async modes that crash the client.
         """
-        # Get default operations from parent
         ops = super().register_operations()
-
-        # 1. Add our custom 'query' method to the standard mode ("")
+        
         if "" not in ops:
             ops[""] = []
         if "query" not in ops[""]:
             ops[""].append("query")
-
-        # 2. REMOVE unsupported modes that cause client-side registration failure
-        # The ReasoningEngine client throws ValueError if it sees "async" or "async_stream"
+            
         if "async" in ops:
             del ops["async"]
         if "async_stream" in ops:
             del ops["async_stream"]
-
+            
         return ops
 
 
@@ -202,7 +210,7 @@ def deploy_agent_engine_app(
     # Read requirements
     with open(requirements_file) as f:
         requirements = f.read().strip().split("\n")
-
+    
     # Use our custom AgentEngineApp
     agent_engine = AgentEngineApp(
         agent=root_agent,
