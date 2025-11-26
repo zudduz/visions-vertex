@@ -36,6 +36,7 @@ class AgentEngineApp(AdkApp):
         """
         # We need to run the async agent synchronously
         import asyncio
+        import threading
 
         # Helper to run async query
         async def _run_async():
@@ -44,31 +45,41 @@ class AgentEngineApp(AdkApp):
             )
             return await context.run_agent(prompt=input)
 
-        # Run in new event loop if needed, or existing one
+        # Container for result or exception
+        result_container = {"data": None, "error": None}
+
+        def run_in_thread():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                result_container["data"] = new_loop.run_until_complete(_run_async())
+            except Exception as e:
+                result_container["error"] = e
+                logging.error(f"Error in async execution: {e}", exc_info=True)
+            finally:
+                new_loop.close()
+
+        # Check for existing loop
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            loop = None
 
-        if loop.is_running():
-            # If we are already in a running loop (unlikely for this sync call but possible)
-            # we can't block. But Agent Engine calls this in a thread usually.
-            # For simplicity/safety in standard python env:
-            import threading
-            result = []
-            def run_in_thread():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                result.append(new_loop.run_until_complete(_run_async()))
-                new_loop.close()
-
+        if loop and loop.is_running():
             t = threading.Thread(target=run_in_thread)
             t.start()
             t.join()
-            return result[0]
         else:
-            return loop.run_until_complete(_run_async())
+             # No running loop, just run it directly
+             # (Though Vertex AI might have one, so thread safety is good)
+             t = threading.Thread(target=run_in_thread)
+             t.start()
+             t.join()
+
+        if result_container["error"]:
+            raise result_container["error"]
+
+        return result_container["data"]
 
     def register_operations(self) -> dict[str, list[str]]:
         """
