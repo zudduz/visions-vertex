@@ -200,3 +200,4 @@ my_env.tfvars
 .saved_chats
 .env
 .requirements.txt
+_adk_samples_temp/

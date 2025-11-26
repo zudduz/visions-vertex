@@ -1,15 +1,8 @@
 import logging
-import os
-from typing import Any
-
 import click
 import google.auth
 import vertexai
 from google.adk.artifacts import GcsArtifactService
-from google.adk.agents.invocation_context import InvocationContext
-from google.cloud import logging as google_cloud_logging
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider, export
 from vertexai._genai.types import AgentEngine, AgentEngineConfig
 from vertexai.agent_engines.templates.adk import AdkApp
 
@@ -20,68 +13,6 @@ from app.utils.deployment import (
     write_deployment_metadata,
 )
 from app.utils.gcs import create_bucket_if_not_exists
-from app.utils.tracing import CloudTraceLoggingSpanExporter
-from app.utils.typing import Feedback
-
-
-class AgentEngineApp(AdkApp):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.agent = kwargs['agent']
-
-    async def query(self, query: str) -> str:
-        """
-        Queries the agent with the given input and returns the complete,
-        blocking response. This is the entrypoint for synchronous API calls.
-        """
-        context = InvocationContext(
-            agent=self.agent
-        )
-        return await context.run_agent(prompt=query)
-
-    async def query_blocking(self, query: str) -> str:
-        """
-        Queries the agent with the given input and returns the complete,
-        blocking response.
-        """
-        logging.info(f"Received query: {query}")
-        response = await self.query(query=query)
-        logging.info(f"Returning response: {response}")
-        return response
-
-    def set_up(self) -> None:
-        """Set up logging and tracing for the agent engine app."""
-        import logging
-
-        super().set_up()
-        logging.basicConfig(level=logging.INFO)
-        logging_client = google_cloud_logging.Client()
-        self.logger = logging_client.logger(__name__)
-        provider = TracerProvider()
-        processor = export.BatchSpanProcessor(
-            CloudTraceLoggingSpanExporter(
-                project_id=os.environ.get("GOOGLE_CLOUD_PROJECT")
-            )
-        )
-        provider.add_span_processor(processor)
-        trace.set_tracer_provider(provider)
-
-    def register_feedback(self, feedback: dict[str, Any]) -> None:
-        """Collect and log feedback."""
-        feedback_obj = Feedback.model_validate(feedback)
-        self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
-
-    def register_operations(self) -> dict[str, list[str]]:
-        """Registers the operations of the Agent.
-
-        Extends the base operations to include feedback registration functionality.
-        """
-        operations = super().register_operations()
-        operations[""] = operations.get("", []) + [
-            "register_feedback",
-            "query",
-        ]
-        return operations
 
 
 @click.command()
@@ -182,8 +113,11 @@ def deploy_agent_engine_app(
     # Read requirements
     with open(requirements_file) as f:
         requirements = f.read().strip().split("\n")
-    agent_engine = AgentEngineApp(
+    
+    # Use the standard AdkApp directly
+    agent_engine = AdkApp(
         agent=root_agent,
+        enable_tracing=True,
         artifact_service_builder=lambda: GcsArtifactService(
             bucket_name=artifacts_bucket_name
         ),
