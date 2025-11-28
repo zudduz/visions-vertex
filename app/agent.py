@@ -26,7 +26,7 @@ def get_vision_themes() -> str:
 
 root_agent = Agent(
     name="Oracle",
-    model="gemini-2.5-flash",
+    model="gemini-3-pro-preview",
     instruction="""You are an Oracle. You produce visions for pilgrims.
 The visions are vivid and should remain open to the user's interpretation.
 You provide visions not advice or interpretation.
