@@ -12,6 +12,7 @@ from google.genai import types as genai_types
 from google.adk.agents import Agent, SequentialAgent
 from google.adk.tools.tool_context import ToolContext
 from pydantic import BaseModel, Field
+from google.adk.agents.callback_context import CallbackContext
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,7 +47,6 @@ def initialize_gcs():
             new_bucket = storage_client.create_bucket(VISION_BUCKET_NAME, location=location)
             logger.info(f"Bucket {VISION_BUCKET_NAME} created in {location}.")
             
-            # Set the 7-day deletion lifecycle rule on the new bucket
             new_bucket.lifecycle_rules = [
                 {"action": {"type": "Delete"}, "condition": {"age": 7}}
             ]
@@ -56,10 +56,8 @@ def initialize_gcs():
             logger.info(f"Bucket {VISION_BUCKET_NAME} already exists.")
             
     except Exception as e:
-        # Log the error and continue; the tool call will likely fail, but we don't want to crash at startup.
         logger.error(f"Failed to initialize GCS bucket: {e}")
 
-# Run GCS initialization at startup
 initialize_gcs()
 
 # --- Tools ---
@@ -71,7 +69,7 @@ def get_vision_themes() -> str:
     return themes
 
 def generate_vision_image(vision_description: str, tool_context: ToolContext) -> Dict[str, Any]:
-    """Generates an image and uploads it to GCS."""
+    """Generates an image, uploads it to GCS, and saves the public URL to the session state."""
     logger.info(f"Generating image for: {vision_description}")
     try:
         model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
@@ -96,12 +94,34 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
             logger.warning(f"Could not make blob public: {auth_e}")
             public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
 
+        # Directly set the URL in the session state.
         tool_context.state["generated_image_url"] = public_url
+        logger.info(f"Set 'generated_image_url' in state: {public_url}")
+
         return {"status": "success", "url": public_url}
 
     except Exception as e:
         logger.error(f"Error in generate_vision_image: {e}")
         return {"status": "error", "message": str(e)}
+
+# --- Callbacks for Logging ---
+
+def log_state_callback(callback_context: CallbackContext) -> None:
+    """Logs the current state before an agent runs."""
+    agent_name = callback_context.agent.name
+    state = callback_context.state
+    logger.info(f"--- Running agent: {agent_name} ---")
+    
+    if "vision_text" in state:
+        logger.info(f"State['vision_text']: {state.get('vision_text')}")
+    else:
+        logger.info("State['vision_text']: Not found")
+        
+    if "generated_image_url" in state:
+        logger.info(f"State['generated_image_url']: {state.get('generated_image_url')}")
+    else:
+        logger.info("State['generated_image_url']: Not found")
+    logger.info("-----------------------------------------")
 
 # --- Agent Definitions ---
 
@@ -120,8 +140,12 @@ text_generator = Agent(
 image_generator = Agent(
     name="image_generator",
     model="gemini-2.5-flash",
-    instruction="""You are an image generation specialist.\nUse the `generate_vision_image` tool.\nUse the vision text provided in `{vision_text}` as the `vision_description` for the tool.""",
+    instruction="""You are an image generation specialist.
+    Use the `generate_vision_image` tool with the vision text provided in `{vision_text}`.
+    Acknowledge completion of the task.
+    """,
     tools=[generate_vision_image],
+    before_agent_callback=log_state_callback
 )
 
 vision_formatter = Agent(
@@ -129,7 +153,8 @@ vision_formatter = Agent(
     model="gemini-2.5-flash",
     instruction="""You are a formatter. \nConstruct a JSON response using the data provided in the session state.\n- vision_text: {vision_text}\n- image_url: {generated_image_url}""",
     output_schema=OracleResponse,
-    include_contents="none"
+    include_contents="none",
+    before_agent_callback=log_state_callback
 )
 
 root_agent = SequentialAgent(
