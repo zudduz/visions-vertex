@@ -71,8 +71,8 @@ def get_vision_themes() -> str:
     logger.info(f"Selected themes: {themes}")
     return themes
 
-def generate_vision_image(vision_description: str, tool_context: ToolContext) -> Dict[str, Any]:
-    """Generates an image, uploads it to GCS, and saves the public URL to the session state."""
+def generate_vision_image(vision_description: str) -> Dict[str, Any]:
+    """Generates an image, uploads it to GCS, and returns the public URL."""
     logger.info(f"Generating image for: {vision_description}")
     try:
         model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
@@ -96,10 +96,6 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
         except Exception as auth_e:
             logger.warning(f"Could not make blob public: {auth_e}")
             public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
-
-        # Directly set the URL in the session state.
-        tool_context.state["generated_image_url"] = public_url
-        logger.info(f"Set 'generated_image_url' in state: {public_url}")
 
         return {"status": "success", "url": public_url}
 
@@ -141,28 +137,20 @@ text_generator = Agent(
     before_agent_callback=log_state_callback
 )
 
-image_generator = Agent(
-    name="image_generator",
+image_and_format_agent = Agent(
+    name="image_and_format_agent",
     model="gemini-2.5-flash",
-    instruction='''You are an image generation specialist.
-    Use the `generate_vision_image` tool with the vision text provided in `{vision_text}`.
-    Acknowledge completion of the task.
-    ''',
+    instruction='''You are an image generation and formatting specialist.
+1. Use the `generate_vision_image` tool with the vision text provided in `{vision_text}`.
+2. Once the image is generated, use the `vision_text` from the state and the `url` from the tool's output to construct the final JSON response conforming to the OracleResponse schema.
+''',
     tools=[generate_vision_image],
-    before_agent_callback=log_state_callback
-)
-
-vision_formatter = Agent(
-    name="vision_formatter",
-    model="gemini-2.5-flash",
-    instruction='''You are a formatter. \nConstruct a JSON response using the data provided in the session state.\n- vision_text: {vision_text}\n- image_url: {generated_image_url}''',
     output_schema=OracleResponse,
-    include_contents="none",
     before_agent_callback=log_state_callback
 )
 
 root_agent = SequentialAgent(
     name="Oracle",
     description="Generates a rhyming vision and a matching visualization.",
-    sub_agents=[text_generator, image_generator, vision_formatter]
+    sub_agents=[text_generator, image_and_format_agent]
 )
