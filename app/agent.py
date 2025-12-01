@@ -36,32 +36,9 @@ vertexai.init(project=project_id, location=location, credentials=creds)
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", location)
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
+# IMPORTANT: This bucket must be created manually before running the agent.
+# See the README.md file for setup instructions.
 VISION_BUCKET_NAME = f"{project_id}-oracle-visions"
-
-def initialize_gcs():
-    """Checks for GCS bucket and creates it with a lifecycle rule if it does not exist."""
-    logger.info(f"Initializing GCS bucket: {VISION_BUCKET_NAME}")
-    try:
-        storage_client = storage.Client(project=project_id)
-        bucket = storage_client.bucket(VISION_BUCKET_NAME)
-        
-        if not bucket.exists():
-            logger.info(f"Bucket {VISION_BUCKET_NAME} not found. Creating...")
-            new_bucket = storage_client.create_bucket(VISION_BUCKET_NAME, location=location)
-            logger.info(f"Bucket {VISION_BUCKET_NAME} created in {location}.")
-            
-            new_bucket.lifecycle_rules = [
-                {"action": {"type": "Delete"}, "condition": {"age": 7}}
-            ]
-            new_bucket.patch()
-            logger.info("7-day expiration rule set for the bucket.")
-        else:
-            logger.info(f"Bucket {VISION_BUCKET_NAME} already exists.")
-            
-    except Exception as e:
-        logger.error(f"Failed to initialize GCS bucket: {e}", exc_info=True)
-
-initialize_gcs()
 
 # --- Tools ---
 
@@ -76,35 +53,25 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
     logger.info(f"Attempting to generate image for: {vision_description}")
     try:
         model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
-        logger.info("Image Generation Model loaded successfully.")
         images = model.generate_images(prompt=vision_description, number_of_images=1)
-        logger.info("Image generation call completed.")
         
         if not images:
             logger.error("Image generation failed, no images returned.")
             return {"status": "error", "message": "No image was generated."}
 
-        logger.info("Image generated successfully.")
         image_bytes = images[0]._image_bytes
         
         storage_client = storage.Client(project=project_id)
-        logger.info("GCS Client initialized.")
         bucket = storage_client.bucket(VISION_BUCKET_NAME)
-        logger.info(f"GCS bucket object retrieved: {bucket.name}")
 
         blob_name = f"visions/{uuid.uuid4()}.png"
         blob = bucket.blob(blob_name)
-        logger.info(f"GCS blob object created: {blob.name}")
 
-        logger.info(f"Uploading image to gs://{VISION_BUCKET_NAME}/{blob_name}...")
         blob.upload_from_string(image_bytes, content_type="image/png")
-        logger.info("Image uploaded to GCS successfully.")
         
-        # The bucket should be configured for public access. The URL is constructed directly.
         public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
 
         tool_context.state["generated_image_url"] = public_url
-        logger.info(f"Successfully set 'generated_image_url' in state: {public_url}")
 
         return {"status": "success", "url": public_url}
 

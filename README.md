@@ -1,96 +1,42 @@
-# visions-vertex
+# Visionary Oracle Agent
 
-A base ReAct agent built with Google's Agent Development Kit (ADK)
-Agent generated with [`googleCloudPlatform/agent-starter-pack`](https://github.com/GoogleCloudPlatform/agent-starter-pack) version `0.19.2`
+This agent generates rhyming, prophetic visions and creates an accompanying image.
 
-## Project Structure
+## Prerequisites
 
-This project is organized as follows:
+Before running this agent, you must manually create and configure a Google Cloud Storage (GCS) bucket for the images to be stored. This is a one-time setup.
 
-```
-oracle/
-├── app/                 # Core application code
-│   ├── agent.py         # Main agent logic
-│   ├── agent_engine_app.py # Agent Engine application logic
-│   └── utils/           # Utility functions and helpers
-├── .cloudbuild/         # CI/CD pipeline configurations for Google Cloud Build
-├── deployment/          # Infrastructure and deployment scripts
-├── notebooks/           # Jupyter notebooks for prototyping and evaluation
-├── tests/               # Unit, integration, and load tests
-├── Makefile             # Makefile for common commands
-├── GEMINI.md            # AI-assisted development guide
-└── pyproject.toml       # Project dependencies and configuration
-```
+### 1. Create the GCS Bucket
 
-## Requirements
+First, you need to create a GCS bucket. The name used in the agent is based on your Google Cloud Project ID.
 
-Before you begin, ensure you have:
-- **uv**: Python package manager (used for all dependency management in this project) - [Install](https://docs.astral.sh/uv/getting-started/installation/) ([add packages](https://docs.astral.sh/uv/concepts/dependencies/) with `uv add <package>`)
-- **Google Cloud SDK**: For GCP services - [Install](https://cloud.google.com/sdk/docs/install)
-- **Terraform**: For infrastructure deployment - [Install](https://developer.hashicorp.com/terraform/downloads)
-- **make**: Build automation tool - [Install](https://www.gnu.org/software/make/) (pre-installed on most Unix-based systems)
+1.  **Find your Project ID:** You can find this in the Google Cloud Console dashboard. For this project, it is `sandbox-456821`.
+2.  **Construct the Bucket Name:** The bucket name must be `[YOUR_PROJECT_ID]-oracle-visions`. For this project, the name will be `sandbox-456821-oracle-visions`.
+3.  **Create the Bucket:** Use the `gsutil` command-line tool to create the bucket.
 
+    ```bash
+    gsutil mb -p sandbox-456821 -l us-central1 gs://sandbox-456821-oracle-visions
+    ```
 
-## Quick Start (Local Testing)
+### 2. Set Public Access for the Bucket
 
-Install required packages and launch the local development environment:
+For the generated image URLs to be viewable, you must make the objects in the bucket publicly readable.
 
-```bash
-make install && make playground
-```
+*   **Run the following `gsutil` command:**
 
-## Commands
+    ```bash
+    gsutil iam ch allUsers:objectViewer gs://sandbox-456821-oracle-visions
+    ```
 
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `make install`       | Install all required dependencies using uv                                                  |
-| `make playground`    | Launch Streamlit interface for testing agent locally and remotely |
-| `make deploy`        | Deploy agent to Agent Engine |
-| `make register-gemini-enterprise` | Register deployed agent to Gemini Enterprise ([docs](https://googlecloudplatform.github.io/agent-starter-pack/cli/register_gemini_enterprise.html)) |
-| `make test`          | Run unit and integration tests                                                              |
-| `make lint`          | Run code quality checks (codespell, ruff, mypy)                                             |
-| `make setup-dev-env` | Set up development environment resources using Terraform                         |
+### 3. Grant Permissions to the Agent's Service Account
 
-For full command options and usage, refer to the [Makefile](Makefile).
+The agent runs on Vertex AI Agent Engine and uses a specific service account to interact with other Google Cloud services. You must grant this service account permission to upload files to the bucket.
 
+1.  **Identify the Service Account:** The service account email address is constructed based on your project number. You can find this by running the agent once and viewing the error logs, or by finding the service account in the IAM section of the Google Cloud Console. For this project, the service account is:
+    `service-171510694317@gcp-sa-aiplatform-re.iam.gserviceaccount.com`
 
-## Usage
+2.  **Grant the `Storage Object Creator` Role:** In the IAM section of the Google Cloud Console, find this service account and grant it the **`Storage Object Creator`** role. If you cannot see the service account, make sure to check the box that says **"Include Google-provided role grants"**.
 
-This template follows a "bring your own agent" approach - you focus on your business logic, and the template handles everything else (UI, infrastructure, deployment, monitoring).
+## Running the Agent
 
-1. **Prototype:** Build your Generative AI Agent using the intro notebooks in `notebooks/` for guidance. Use Vertex AI Evaluation to assess performance.
-2. **Integrate:** Import your agent into the app by editing `app/agent.py`.
-3. **Test:** Explore your agent functionality using the Streamlit playground with `make playground`. The playground offers features like chat history, user feedback, and various input types, and automatically reloads your agent on code changes.
-4. **Deploy:** Set up and initiate the CI/CD pipelines, customizing tests as necessary. Refer to the [deployment section](#deployment) for comprehensive instructions. For streamlined infrastructure deployment, simply run `uvx agent-starter-pack setup-cicd`. Check out the [`agent-starter-pack setup-cicd` CLI command](https://googlecloudplatform.github.io/agent-starter-pack/cli/setup_cicd.html). Currently supports GitHub with both Google Cloud Build and GitHub Actions as CI/CD runners.
-5. **Monitor:** Track performance and gather insights using Cloud Logging, Tracing, and the Looker Studio dashboard to iterate on your application.
-
-The project includes a `GEMINI.md` file that provides context for AI tools like Gemini CLI when asking questions about your template.
-
-
-## Deployment
-
-> **Note:** For a streamlined one-command deployment of the entire CI/CD pipeline and infrastructure using Terraform, you can use the [`agent-starter-pack setup-cicd` CLI command](https://googlecloudplatform.github.io/agent-starter-pack/cli/setup_cicd.html). Currently supports GitHub with both Google Cloud Build and GitHub Actions as CI/CD runners.
-
-### Dev Environment
-
-You can test deployment towards a Dev Environment using the following command:
-
-```bash
-gcloud config set project <your-dev-project-id>
-make deploy
-```
-
-
-The repository includes a Terraform configuration for the setup of the Dev Google Cloud project.
-See [deployment/README.md](deployment/README.md) for instructions.
-
-### Production Deployment
-
-The repository includes a Terraform configuration for the setup of a production Google Cloud project. Refer to [deployment/README.md](deployment/README.md) for detailed instructions on how to deploy the infrastructure and application.
-
-
-## Monitoring and Observability
-> You can use [this Looker Studio dashboard](https://lookerstudio.google.com/reporting/46b35167-b38b-4e44-bd37-701ef4307418/page/tEnnC
-) template for visualizing events being logged in BigQuery. See the "Setup Instructions" tab to getting started.
-
-The application uses OpenTelemetry for comprehensive observability with all events being sent to Google Cloud Trace and Logging for monitoring and to BigQuery for long term storage.
+Once the GCS bucket and permissions are configured, you can deploy and run the agent as usual. The agent will now use the bucket you created to store and serve the generated images.
