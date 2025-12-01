@@ -109,7 +109,7 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
 def log_state_callback(callback_context: CallbackContext) -> None:
     """Logs the current state before an agent runs."""
     state = callback_context.state
-    agent_name = callback_context._invocation_context.current_agent.name
+    agent_name = callback_context._invocation_context.agent.name
     logger.info(f"--- Running agent: {agent_name} ---")
     
     if "vision_text" in state:
