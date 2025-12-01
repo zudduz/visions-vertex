@@ -100,6 +100,7 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
         blob.upload_from_string(image_bytes, content_type="image/png")
         logger.info("Image uploaded to GCS successfully.")
         
+        # The bucket should be configured for public access. The URL is constructed directly.
         public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
 
         tool_context.state["generated_image_url"] = public_url
