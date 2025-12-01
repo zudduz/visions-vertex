@@ -21,14 +21,48 @@ THEMES = [
     "Self Discovery", "Prophetically hopeful", "Prophetically dark"
 ]
 
+# --- Configuration and Initialization ---
+
+location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+
 _, project_id = google.auth.default()
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
-vertexai.init(project=project_id, location="us-central1")
+vertexai.init(project=project_id, location=location)
 
-os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "us-central1") 
+os.environ.setdefault("GOOGLE_CLOUD_LOCATION", location)
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
 VISION_BUCKET_NAME = f"{project_id}-oracle-visions"
+
+def initialize_gcs():
+    """Checks for GCS bucket and creates it with a lifecycle rule if it doesn't exist."""
+    logger.info(f"Initializing GCS bucket: {VISION_BUCKET_NAME}")
+    try:
+        storage_client = storage.Client(project=project_id)
+        bucket = storage_client.bucket(VISION_BUCKET_NAME)
+        
+        if not bucket.exists():
+            logger.info(f"Bucket {VISION_BUCKET_NAME} not found. Creating...")
+            new_bucket = storage_client.create_bucket(VISION_BUCKET_NAME, location=location)
+            logger.info(f"Bucket {VISION_BUCKET_NAME} created in {location}.")
+            
+            # Set the 7-day deletion lifecycle rule on the new bucket
+            new_bucket.lifecycle_rules = [
+                {"action": {"type": "Delete"}, "condition": {"age": 7}}
+            ]
+            new_bucket.patch()
+            logger.info("7-day expiration rule set for the bucket.")
+        else:
+            logger.info(f"Bucket {VISION_BUCKET_NAME} already exists.")
+            
+    except Exception as e:
+        # Log the error and continue; the tool call will likely fail, but we don't want to crash at startup.
+        logger.error(f"Failed to initialize GCS bucket: {e}")
+
+# Run GCS initialization at startup
+initialize_gcs()
+
+# --- Tools ---
 
 def get_vision_themes() -> str:
     """Selects two random themes for a vision."""
@@ -37,7 +71,7 @@ def get_vision_themes() -> str:
     return themes
 
 def generate_vision_image(vision_description: str, tool_context: ToolContext) -> Dict[str, Any]:
-    """Generates an image, uploads it to GCS, and sets a 7-day expiry."""
+    """Generates an image and uploads it to GCS."""
     logger.info(f"Generating image for: {vision_description}")
     try:
         model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
@@ -48,17 +82,8 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
 
         image_bytes = images[0]._image_bytes
         
-        storage_client = storage.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT"))
+        storage_client = storage.Client(project=project_id)
         bucket = storage_client.bucket(VISION_BUCKET_NAME)
-        
-        if not bucket.exists():
-            bucket = storage_client.create_bucket(VISION_BUCKET_NAME, location="us-central1")
-        
-        # Add/update lifecycle rule to delete objects after 7 days
-        bucket.lifecycle_rules = [
-            {"action": {"type": "Delete"}, "condition": {"age": 7}}
-        ]
-        bucket.patch()
 
         blob_name = f"visions/{uuid.uuid4()}.png"
         blob = bucket.blob(blob_name)
@@ -72,58 +97,41 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
             public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
 
         tool_context.state["generated_image_url"] = public_url
-        
         return {"status": "success", "url": public_url}
 
     except Exception as e:
         logger.error(f"Error in generate_vision_image: {e}")
         return {"status": "error", "message": str(e)}
 
-# 1. Define the Output Schema
+# --- Agent Definitions ---
+
 class OracleResponse(BaseModel):
     vision_text: str = Field(description="The rhyming text description of the vision.")
     image_url: str = Field(description="The public URL of the generated vision image.")
 
-# 2. Define the Agent Pipeline
-# Step 1: Generate the vision text
 text_generator = Agent(
     name="text_generator",
     model="gemini-2.5-pro",
-    instruction="""You are an Oracle's creative mind.
-    1. Use `get_vision_themes` to pick your themes.
-    2. Generate a 4-line rhyming vision description based on the themes.
-    Output ONLY the rhyming vision text.
-    """,
+    instruction="""You are an Oracle's creative mind.\n1. Use `get_vision_themes` to pick your themes.\n2. Generate a 4-line rhyming vision description based on the themes.\nOutput ONLY the rhyming vision text.""",
     tools=[get_vision_themes],
     output_key="vision_text"
 )
 
-# Step 2: Generate the image from the text
 image_generator = Agent(
     name="image_generator",
     model="gemini-2.5-flash",
-    instruction="""You are an image generation specialist.
-    Use the `generate_vision_image` tool.
-    Use the vision text provided in `{vision_text}` as the `vision_description` for the tool.
-    """,
+    instruction="""You are an image generation specialist.\nUse the `generate_vision_image` tool.\nUse the vision text provided in `{vision_text}` as the `vision_description` for the tool.""",
     tools=[generate_vision_image],
 )
 
-# Step 3: Format the final response
 vision_formatter = Agent(
     name="vision_formatter",
     model="gemini-2.5-flash",
-    instruction="""You are a formatter. 
-    Construct a JSON response using the data provided in the session state.
-    - vision_text: {vision_text}
-    - image_url: {generated_image_url}
-    """,
+    instruction="""You are a formatter. \nConstruct a JSON response using the data provided in the session state.\n- vision_text: {vision_text}\n- image_url: {generated_image_url}""",
     output_schema=OracleResponse,
-    # This agent doesn't need history, just the final state
-    include_contents="none" 
+    include_contents="none"
 )
 
-# 3. Define the Sequential Pipeline
 root_agent = SequentialAgent(
     name="Oracle",
     description="Generates a rhyming vision and a matching visualization.",
