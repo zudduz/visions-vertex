@@ -132,6 +132,7 @@ vision_formatter = Agent(
     model="gemini-2.5-flash",
     instruction="""You are a formatter.
 Construct a JSON response using the data provided in the session state.
+CRITICAL: You MUST preserve the line breaks from the `vision_text` by using a `\n` in the final JSON string.
 - vision_text: {vision_text}
 - image_url: {generated_image_url}
 """,
