@@ -23,15 +23,11 @@ THEMES = [
 
 _, project_id = google.auth.default()
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
-# Imagen 3 is available in us-central1
 vertexai.init(project=project_id, location="us-central1")
 
-# Set this back to global for other services if needed, or leave as is if us-central1 is fine.
-# The original code had "global", but Imagen needs a region.
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "us-central1") 
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
-# Bucket name for storing images
 VISION_BUCKET_NAME = f"{project_id}-oracle-visions"
 
 def get_vision_themes() -> str:
@@ -41,69 +37,46 @@ def get_vision_themes() -> str:
     return themes
 
 def generate_vision_image(vision_description: str, tool_context: ToolContext) -> Dict[str, Any]:
-    """Generates an image based on the vision description and uploads it to GCS.
-
-    Args:
-        vision_description (str): The text description of the vision to visualize.
-        tool_context (ToolContext): The tool context to save state.
-
-    Returns:
-        dict: A status message containing the public URL of the image.
-    """
+    """Generates an image, uploads it to GCS, and sets a 7-day expiry."""
     logger.info(f"Generating image for: {vision_description}")
     try:
         model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
-        
-        # Generate the image
-        images = model.generate_images(
-            prompt=vision_description,
-            number_of_images=1,
-            language="en",
-            aspect_ratio="1:1",
-            safety_filter_level="block_some",
-            person_generation="allow_adult"
-        )
+        images = model.generate_images(prompt=vision_description, number_of_images=1)
         
         if not images:
              return {"status": "error", "message": "No image generated."}
 
-        # Get the bytes of the first image
         image_bytes = images[0]._image_bytes
         
-        # Upload to GCS
         storage_client = storage.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT"))
         bucket = storage_client.bucket(VISION_BUCKET_NAME)
         
-        # Ensure bucket exists (simple check, or rely on setup)
         if not bucket.exists():
             bucket = storage_client.create_bucket(VISION_BUCKET_NAME, location="us-central1")
-            # Make bucket public readable if required, or just the objects
-            # For simplicity, we'll try to make the object public. 
-            # Note: Public access prevention on the bucket might block this.
         
+        # Add/update lifecycle rule to delete objects after 7 days
+        bucket.lifecycle_rules = [
+            {"action": {"type": "Delete"}, "condition": {"age": 7}}
+        ]
+        bucket.patch()
+
         blob_name = f"visions/{uuid.uuid4()}.png"
         blob = bucket.blob(blob_name)
         blob.upload_from_string(image_bytes, content_type="image/png")
         
-        # Make the blob publicly accessible (Optional: depends on security policy)
-        # For a truly public app without auth, this is needed.
-        # Use try-except as this might fail if "Domain Restricted Sharing" or "Public Access Prevention" is on.
         try:
             blob.make_public()
             public_url = blob.public_url
         except Exception as auth_e:
             logger.warning(f"Could not make blob public: {auth_e}")
-            # Fallback to authenticated link or signed URL if needed, but for now return the direct link
-            # which works if the bucket is public or user has access.
             public_url = f"https://storage.googleapis.com/{VISION_BUCKET_NAME}/{blob_name}"
 
-        # Save URL to state for the formatter agent
         tool_context.state["generated_image_url"] = public_url
         
         return {"status": "success", "url": public_url}
 
     except Exception as e:
-        logger.error(f"Error generating/uploading image: {e}")
+        logger.error(f"Error in generate_vision_image: {e}")
         return {"status": "error", "message": str(e)}
 
 # 1. Define the Output Schema
@@ -111,36 +84,48 @@ class OracleResponse(BaseModel):
     vision_text: str = Field(description="The rhyming text description of the vision.")
     image_url: str = Field(description="The public URL of the generated vision image.")
 
-# 2. Define the Generator Agent (Uses Tools)
-vision_generator = Agent(
-    name="vision_generator",
+# 2. Define the Agent Pipeline
+# Step 1: Generate the vision text
+text_generator = Agent(
+    name="text_generator",
     model="gemini-2.5-pro",
     instruction="""You are an Oracle's creative mind.
-    1. Use `get_vision_themes` to pick themes.
-    2. Generate a rhyming vision description based on them.
-    3. Use `generate_vision_image` to visualize that EXACT description.
-    
-    Output ONLY the rhyming vision text. Do not output JSON.
+    1. Use `get_vision_themes` to pick your themes.
+    2. Generate a 4-line rhyming vision description based on the themes.
+    Output ONLY the rhyming vision text.
     """,
-    tools=[get_vision_themes, generate_vision_image],
-    output_key="vision_text_content" # Save raw text to state
+    tools=[get_vision_themes],
+    output_key="vision_text"
 )
 
-# 3. Define the Formatter Agent (Enforces Schema)
+# Step 2: Generate the image from the text
+image_generator = Agent(
+    name="image_generator",
+    model="gemini-2.5-flash",
+    instruction="""You are an image generation specialist.
+    Use the `generate_vision_image` tool.
+    Use the vision text provided in `{vision_text}` as the `vision_description` for the tool.
+    """,
+    tools=[generate_vision_image],
+)
+
+# Step 3: Format the final response
 vision_formatter = Agent(
     name="vision_formatter",
     model="gemini-2.5-flash",
     instruction="""You are a formatter. 
-    Construct a response using the data provided in the session state.
-    - vision_text: {vision_text_content}
+    Construct a JSON response using the data provided in the session state.
+    - vision_text: {vision_text}
     - image_url: {generated_image_url}
     """,
-    output_schema=OracleResponse
+    output_schema=OracleResponse,
+    # This agent doesn't need history, just the final state
+    include_contents="none" 
 )
 
-# 4. Define the Sequential Pipeline
+# 3. Define the Sequential Pipeline
 root_agent = SequentialAgent(
     name="Oracle",
     description="Generates a rhyming vision and a matching visualization.",
-    sub_agents=[vision_generator, vision_formatter]
+    sub_agents=[text_generator, image_generator, vision_formatter]
 )
