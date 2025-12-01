@@ -26,9 +26,12 @@ THEMES = [
 
 location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-_, project_id = google.auth.default()
+# Hardcode the project ID to prevent issues where the environment
+# provides a project number instead of the string ID.
+project_id = "sandbox-456821"
+creds, _ = google.auth.default()
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
-vertexai.init(project=project_id, location=location)
+vertexai.init(project=project_id, location=location, credentials=creds)
 
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", location)
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
@@ -132,7 +135,7 @@ class OracleResponse(BaseModel):
 text_generator = Agent(
     name="text_generator",
     model="gemini-2.5-pro",
-    instruction="""You are an Oracle's creative mind.\n1. Use `get_vision_themes` to pick your themes.\n2. Generate a 4-line rhyming vision description based on the themes.\nOutput ONLY the rhyming vision text.""",
+    instruction='''You are an Oracle's creative mind.\n1. Use `get_vision_themes` to pick your themes.\n2. Generate a 4-line rhyming vision description based on the themes.\nOutput ONLY the rhyming vision text.''',
     tools=[get_vision_themes],
     output_key="vision_text",
     before_agent_callback=log_state_callback
@@ -141,10 +144,10 @@ text_generator = Agent(
 image_generator = Agent(
     name="image_generator",
     model="gemini-2.5-flash",
-    instruction="""You are an image generation specialist.
+    instruction='''You are an image generation specialist.
     Use the `generate_vision_image` tool with the vision text provided in `{vision_text}`.
     Acknowledge completion of the task.
-    """,
+    ''',
     tools=[generate_vision_image],
     before_agent_callback=log_state_callback
 )
@@ -152,7 +155,7 @@ image_generator = Agent(
 vision_formatter = Agent(
     name="vision_formatter",
     model="gemini-2.5-flash",
-    instruction="""You are a formatter. \nConstruct a JSON response using the data provided in the session state.\n- vision_text: {vision_text}\n- image_url: {generated_image_url}""",
+    instruction='''You are a formatter. \nConstruct a JSON response using the data provided in the session state.\n- vision_text: {vision_text}\n- image_url: {generated_image_url}''',
     output_schema=OracleResponse,
     include_contents="none",
     before_agent_callback=log_state_callback
