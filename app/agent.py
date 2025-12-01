@@ -108,8 +108,8 @@ def generate_vision_image(vision_description: str, tool_context: ToolContext) ->
 
 def log_state_callback(callback_context: CallbackContext) -> None:
     """Logs the current state before an agent runs."""
-    agent_name = callback_context.agent.name
     state = callback_context.state
+    agent_name = callback_context._invocation_context.current_agent.name
     logger.info(f"--- Running agent: {agent_name} ---")
     
     if "vision_text" in state:
@@ -134,7 +134,8 @@ text_generator = Agent(
     model="gemini-2.5-pro",
     instruction="""You are an Oracle's creative mind.\n1. Use `get_vision_themes` to pick your themes.\n2. Generate a 4-line rhyming vision description based on the themes.\nOutput ONLY the rhyming vision text.""",
     tools=[get_vision_themes],
-    output_key="vision_text"
+    output_key="vision_text",
+    before_agent_callback=log_state_callback
 )
 
 image_generator = Agent(
