@@ -13,9 +13,6 @@ from google.adk.agents import Agent, SequentialAgent
 from google.adk.tools.tool_context import ToolContext
 from pydantic import BaseModel, Field
 from google.adk.agents.callback_context import CallbackContext
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,8 +26,9 @@ THEMES = [
 
 location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-# Load project ID from environment variables, with a fallback.
-project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "sandbox-456821")
+# Hardcode the project ID to prevent issues where the environment
+# provides a project number instead of the string ID.
+project_id = "sandbox-456821"
 creds, _ = google.auth.default()
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
 vertexai.init(project=project_id, location=location, credentials=creds)
