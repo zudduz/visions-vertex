@@ -61,6 +61,7 @@ def generate_vision_image(vision_description: str,
 
         if not images:
             logger.error("Image generation failed, no images returned.")
+            tool_context.state["generated_image_url"] = ""
             return {"status": "error", "message": "No image was generated."}
 
         image_bytes = images[0]._image_bytes
@@ -82,6 +83,7 @@ def generate_vision_image(vision_description: str,
     except Exception as e:
         logger.error(f"An exception occurred in generate_vision_image: {e}",
                      exc_info=True)
+        tool_context.state["generated_image_url"] = ""
         return {"status": "error", "message": str(e)}
 
 
@@ -115,6 +117,7 @@ class OracleResponse(BaseModel):
     vision_text: str = Field(
         description="The rhyming text description of the vision.")
     image_url: str = Field(
+        default="",
         description="The public URL of the generated vision image.")
 
 
