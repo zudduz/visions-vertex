@@ -122,35 +122,35 @@ class OracleResponse(BaseModel):
 
 
 text_generator = Agent(name="text_generator",
-                       model="gemini-2.5-pro",
-                       instruction="""You are an Oracle's creative mind.
+    model="gemini-2.5-pro",
+    instruction="""You are an Oracle's creative mind.
 1. Use `get_vision_themes` to pick your themes.
 2. Generate a 4-line rhyming vision description based on the themes.
 Output ONLY the rhyming vision text.""",
-                       tools=[get_vision_themes],
-                       output_key="vision_text",
-                       before_agent_callback=log_state_callback)
+    tools=[get_vision_themes],
+    output_key="vision_text",
+    before_agent_callback=log_state_callback)
 
 image_generator = Agent(name="image_generator",
-                        model="gemini-2.5-flash",
-                        instruction="""You are an image generation specialist.
+    model="gemini-2.5-flash",
+    instruction="""You are an image generation specialist.
 Use the `generate_vision_image` tool with the vision text provided in `{vision_text}`.
 Acknowledge completion of the task.
 """,
-                        tools=[generate_vision_image],
-                        before_agent_callback=log_state_callback)
+    tools=[generate_vision_image],
+    before_agent_callback=log_state_callback)
 
 vision_formatter = Agent(name="vision_formatter",
-                         model="gemini-2.5-flash",
-                         instruction="""You are a formatter.
+    model="gemini-2.5-flash",
+    instruction="""You are a formatter.
 Construct a JSON response using the data provided in the session state.
 CRITICAL: You MUST preserve the line breaks from the `vision_text` by using a `\n` in the final JSON string.
 - vision_text: {vision_text}
 - image_url: {generated_image_url}
 """,
-                         output_schema=OracleResponse,
-                         include_contents="none",
-                         before_agent_callback=log_state_callback)
+    output_schema=OracleResponse,
+    include_contents="none",
+    before_agent_callback=log_state_callback)
 
 root_agent = SequentialAgent(
     name="Oracle",
