@@ -55,7 +55,7 @@ def generate_vision_image(vision_description: str,
     """Generates an image, uploads it to GCS, and saves the public URL to session state."""
     logger.info(f"Attempting to generate image for: {vision_description}")
     try:
-        model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
+        model = ImageGenerationModel.from_pretrained("gemini-2.5-flash-image")
         images = model.generate_images(prompt=vision_description,
                                        number_of_images=1)
 
